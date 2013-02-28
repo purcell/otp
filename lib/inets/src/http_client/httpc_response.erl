@@ -426,7 +426,7 @@ format_response({{"HTTP/0.9", _, _} = StatusLine, _, Body}) ->
 format_response({StatusLine, Headers, Body = <<>>}) ->
     {{StatusLine, http_response:header_list(Headers), Body}, <<>>};
 
-format_response({StatusLine, Headers, Body}) ->
+format_response({{"HTTP/1.0", _, _} = StatusLine, Headers, Body}) ->
     Length = list_to_integer(Headers#http_response_h.'content-length'),
     {NewBody, Data} = 
 	case Length of
@@ -438,6 +438,20 @@ format_response({StatusLine, Headers, Body}) ->
 		<<BodyThisReq:Length/binary, Next/binary>> = Body,
 		{BodyThisReq, Next};
 	    _ -> %% Connection prematurely ended. 
+		{Body, <<>>}
+	end,
+    {{StatusLine, http_response:header_list(Headers), NewBody}, Data};
+
+format_response({{"HTTP/1.1", _, _} = StatusLine, Headers, Body}) ->
+    Length = list_to_integer(Headers#http_response_h.'content-length'),
+    {NewBody, Data} =
+	case Length of
+	    -1 -> % When no lenght indicator is provided
+		{Body, <<>>};
+	    Length when (Length =< size(Body)) ->
+		<<BodyThisReq:Length/binary, Next/binary>> = Body,
+		{BodyThisReq, Next};
+	    _ -> %% Connection prematurely ended.
 		{Body, <<>>}
 	end,
     {{StatusLine, http_response:header_list(Headers), NewBody}, Data}.
